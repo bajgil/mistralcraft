@@ -1,0 +1,106 @@
+:root {
+    --bg-color: #131313;
+    --sidebar-color: #1e1e1e;
+    --board-color: #0d0d0d;
+    --element-bg: #2a2a2a;
+    --element-border: #444;
+    --text-color: #f0f0f0;
+    --accent-color: #3498db;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* --- Tło z gwiazdami --- */
+@keyframes move-stars {
+    from { background-position: 0 0; }
+    to { background-position: -10000px 5000px; }
+}
+#board {
+    flex-grow: 1;
+    background-color: var(--board-color);
+    background-image: 
+        radial-gradient(white, rgba(255,255,255,0) 1px),
+        radial-gradient(white, rgba(255,255,255,0) 1px);
+    background-size: 90px 90px, 160px 160px;
+    background-position: 0 0, 30px 30px;
+    position: relative;
+    overflow: hidden;
+    animation: move-stars 500s linear infinite;
+}
+
+/* --- Stopka --- */
+footer {
+    position: fixed;
+    bottom: 0;
+    left: 240px; /* Szerokość paska bocznego */
+    right: 0;
+    padding: 8px;
+    background-color: rgba(0,0,0,0.5);
+    text-align: center;
+    font-size: 0.8rem;
+    color: #aaa;
+    z-index: 100;
+}
+
+
+/* --- Pasek boczny --- */
+#sidebar {
+    width: 240px;
+    background-color: var(--sidebar-color);
+    padding: 15px;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+}
+#sidebar h2 { text-align: center; margin-top: 0; }
+#elements-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+/* --- Elementy --- */
+.element {
+    background-color: var(--element-bg);
+    border-radius: 8px;
+    padding: 10px 15px;
+    text-align: center;
+    cursor: grab;
+    display: flex; /* Umożliwia wyrównanie emotki i tekstu */
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--element-border);
+}
+#sidebar .element:hover { background-color: #3f3f3f; }
+#board .element { position: absolute; z-index: 20; }
+.element.dragging { cursor: grabbing; opacity: 0.7; z-index: 999; }
+.emoji { font-size: 1.2em; }
+
+/* --- Animacje --- */
+@keyframes appear {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+@keyframes disappear {
+    from { transform: scale(1); opacity: 1; }
+    to { transform: scale(0); opacity: 0; }
+}
+
+.element.appearing {
+    animation: appear 0.3s ease-out forwards;
+}
+.element.disappearing {
+    animation: disappear 0.4s ease-in forwards;
+}
+
+/* --- Nakładka ładowania --- */
+#loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+#loading-overlay.hidden { display: none; }
+.spinner { border: 8px solid #f3f3f3; border-top: 8px solid var(--accent-color); border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
