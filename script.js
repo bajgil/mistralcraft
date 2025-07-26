@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         element2.classList.add('disappearing');
 
         try {
-            const response = await fetch('http://127.0.0.1:5000/combine', {
+            const response = await fetch('https://mistral-craft-backend.onrender.com/combine', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ element1: name1, element2: name2 })
