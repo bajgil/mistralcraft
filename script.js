@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Zmienne, stałe i mapa emotek ---
+    const sidebar = document.getElementById('sidebar');
     const sidebarList = document.getElementById('elements-list');
     const board = document.getElementById('board');
     const loadingOverlay = document.getElementById('loading-overlay');
@@ -23,9 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const saved = localStorage.getItem('mistralCraftDiscoveries');
         if (saved) {
             const parsed = JSON.parse(saved);
-            parsed.forEach(name => createSidebarElement(name, false)); // false - nie zapisuj ponownie
+            parsed.forEach(name => createSidebarElement(name, false));
         } else {
-            // Jeśli nie ma zapisu, dodaj startowe elementy
             const startElements = ['Woda', 'Ogień', 'Ziemia', 'Powietrze'];
             startElements.forEach(name => createSidebarElement(name, true));
         }
@@ -43,12 +43,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const emoji = emojiMap[lowerCaseName] || defaultEmoji;
         elementDiv.innerHTML = `<span class="emoji">${emoji}</span> ${name}`;
         
-        elementDiv.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.element')) {
-                const rect = elementDiv.getBoundingClientRect();
-                createElementOnBoard(name, e.clientX - rect.left, e.clientY - rect.top, e.clientX, e.clientY);
-            }
+        // Zdarzenie dla myszy
+        elementDiv.addEventListener('mousedown', e => handleDragStartFromSidebar(e.clientX, e.clientY, name, elementDiv));
+        // Zdarzenie dla dotyku
+        elementDiv.addEventListener('touchstart', e => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            handleDragStartFromSidebar(touch.clientX, touch.clientY, name, elementDiv);
         });
+
         sidebarList.appendChild(elementDiv);
     }
 
@@ -64,21 +67,20 @@ document.addEventListener('DOMContentLoaded', () => {
         elementDiv.style.top = `${initialY - board.getBoundingClientRect().top - offsetY}px`;
         
         board.appendChild(elementDiv);
-        startDrag(elementDiv, offsetX, offsetY);
+        return elementDiv; // Zwróć element, aby można było od razu rozpocząć przeciąganie
     }
-
+    
     async function combineElements(element1, element2) {
         loadingOverlay.classList.remove('hidden');
         
         const name1 = element1.textContent.trim().split(' ').slice(1).join(' ');
         const name2 = element2.textContent.trim().split(' ').slice(1).join(' ');
 
-        // Animacja znikania
         element1.classList.add('disappearing');
         element2.classList.add('disappearing');
 
         try {
-            const response = await fetch('https://mistral-craft-backend.onrender.com/combine', {
+            const response = await fetch('https://mistral-craft-backend.onrender.com/combine', { // Upewnij się, że masz tu swój poprawny URL z Render
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ element1: name1, element2: name2 })
@@ -93,13 +95,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => {
                     createElementOnBoard(newElementName, rect2.width / 2, rect2.height / 2, rect2.left + rect2.width / 2, rect2.top + rect2.height / 2);
                     createSidebarElement(newElementName, true);
-                }, 400); // Czekaj na zakończenie animacji znikania
+                }, 400);
             }
 
-        } catch (error) {
-            console.error('Błąd łączenia:', error);
+        } catch (error) { console.error('Błąd łączenia:', error);
         } finally {
-            // Usuń połączone elementy z DOM po animacji
             setTimeout(() => {
                 if (element1.parentElement) board.removeChild(element1);
                 if (element2.parentElement) board.removeChild(element2);
@@ -108,18 +108,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Logika Przeciągania na Planszy ---
+    // --- Logika Przeciągania ---
     let activeElement = null;
     let offsetX = 0, offsetY = 0;
 
+    function handleDragStartFromSidebar(clientX, clientY, name, originalElement) {
+        const rect = originalElement.getBoundingClientRect();
+        const newElement = createElementOnBoard(name, clientX - rect.left, clientY - rect.top, clientX, clientY);
+        startDrag(newElement, clientX - rect.left, clientY - rect.top);
+    }
+    
     function startDrag(element, offX, offY) {
+        if (activeElement) return; // Zapobiegaj przeciąganiu wielu elementów naraz
         activeElement = element;
         offsetX = offX;
         offsetY = offY;
-        activeElement.classList.remove('appearing'); // Usuń animację pojawiania się
+        activeElement.classList.remove('appearing');
         activeElement.classList.add('dragging');
     }
 
+    function handleDragMove(e) {
+        if (!activeElement) return;
+        
+        // Zapobiegaj przewijaniu strony na telefonie podczas przeciągania
+        if (e.type === 'touchmove') {
+            e.preventDefault();
+        }
+        
+        const coords = e.type === 'touchmove' ? e.touches[0] : e;
+        const boardRect = board.getBoundingClientRect();
+        
+        let x = coords.clientX - boardRect.left - offsetX;
+        let y = coords.clientY - boardRect.top - offsetY;
+
+        activeElement.style.left = `${x}px`;
+        activeElement.style.top = `${y}px`;
+    }
+
+    function handleDragEnd(e) {
+        if (!activeElement) return;
+        
+        activeElement.classList.remove('dragging');
+        const coords = e.type === 'touchend' ? e.changedTouches[0] : e;
+        
+        const sidebarRect = sidebar.getBoundingClientRect();
+        if (coords.clientX < sidebarRect.right) {
+            activeElement.classList.add('disappearing');
+            setTimeout(() => activeElement.remove(), 400);
+        } else {
+            const droppedOnElement = getElementUnder(activeElement, coords);
+            if (droppedOnElement) {
+                combineElements(activeElement, droppedOnElement);
+            }
+        }
+        activeElement = null;
+    }
+
+    function getElementUnder(element, coords) {
+        element.style.visibility = 'hidden';
+        const elUnder = document.elementFromPoint(coords.clientX, coords.clientY);
+        element.style.visibility = 'visible';
+        
+        if (elUnder && elUnder.classList.contains('element') && elUnder.id !== element.id) {
+            return elUnder;
+        }
+        return null;
+    }
+    
+    // Dodanie event listenerów dla myszy
     board.addEventListener('mousedown', e => {
         const target = e.target.closest('.element');
         if (target) {
@@ -127,45 +183,21 @@ document.addEventListener('DOMContentLoaded', () => {
             startDrag(target, e.clientX - rect.left, e.clientY - rect.top);
         }
     });
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragEnd);
 
-    document.addEventListener('mousemove', e => {
-        if (!activeElement) return;
-        e.preventDefault();
-        const boardRect = board.getBoundingClientRect();
-        let x = e.clientX - boardRect.left - offsetX;
-        let y = e.clientY - boardRect.top - offsetY;
-        activeElement.style.left = `${x}px`;
-        activeElement.style.top = `${y}px`;
-    });
-
-    document.addEventListener('mouseup', e => {
-        if (!activeElement) return;
-        activeElement.classList.remove('dragging');
-
-        const sidebarRect = sidebar.getBoundingClientRect();
-        // Sprawdź, czy upuszczono na pasek boczny (usuwanie)
-        if (e.clientX < sidebarRect.right) {
-            activeElement.classList.add('disappearing');
-            setTimeout(() => activeElement.remove(), 400);
-        } else {
-            // Sprawdź, czy upuszczono na inny element (łączenie)
-            const droppedOnElement = getElementUnder(activeElement);
-            if (droppedOnElement) {
-                combineElements(activeElement, droppedOnElement);
-            }
+    // Dodanie event listenerów dla dotyku
+    board.addEventListener('touchstart', e => {
+        const target = e.target.closest('.element');
+        if (target) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = target.getBoundingClientRect();
+            startDrag(target, touch.clientX - rect.left, touch.clientY - rect.top);
         }
-        activeElement = null;
-    });
-
-    function getElementUnder(element) {
-        element.style.visibility = 'hidden';
-        const elUnder = document.elementFromPoint(
-            element.getBoundingClientRect().left + element.offsetWidth / 2,
-            element.getBoundingClientRect().top + element.offsetHeight / 2
-        );
-        element.style.visibility = 'visible';
-        return elUnder && elUnder.classList.contains('element') && elUnder.id !== element.id ? elUnder : null;
-    }
+    }, { passive: false });
+    document.addEventListener('touchmove', handleDragMove, { passive: false });
+    document.addEventListener('touchend', handleDragEnd);
 
     // --- Inicjalizacja ---
     loadDiscoveries();
